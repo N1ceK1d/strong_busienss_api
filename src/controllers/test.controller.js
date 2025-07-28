@@ -28,3 +28,16 @@ exports.get_questions = async (req, res, next) => {
         next(err);
     }
 };
+
+exports.save_answers = async (req, res, next) => {
+    console.log(req.body);
+    const userData = req.body.user_data;
+    const answers = req.body.answers;
+    try {
+        const result = await test_service.save_answers(userData, answers);
+        console.log('Answers saved successfully', result);
+    } catch (error) {
+        console.error('Failed to save answers', error);
+    }
+    
+}
