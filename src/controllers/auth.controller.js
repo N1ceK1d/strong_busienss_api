@@ -3,7 +3,7 @@ const { generateToken } = require('../services/jwt')
 const bcrypt = require('bcryptjs')
 
 const register = async (req, res, next) => {
-  const { email, password, first_name, last_name, middle_name, company } = req.body
+  const { email, password, first_name, last_name, middle_name, company, phone } = req.body
   
   try {
     if (!email || !password || !first_name || !last_name) {
@@ -13,7 +13,8 @@ const register = async (req, res, next) => {
           email: !email ? 'Требуется email' : undefined,
           password: !password ? 'Требуется пароль' : undefined,
           first_name: !first_name ? 'Требуется имя' : undefined,
-          last_name: !last_name ? 'Требуется фамилия' : undefined
+          last_name: !last_name ? 'Требуется фамилия' : undefined,
+          phone: !phone ? 'Требуется номер телефона' : undefined,
         }
       });
     }
@@ -55,10 +56,11 @@ const register = async (req, res, next) => {
     // 4. Создание пользователя
     const newUser = await pool.query(
       `INSERT INTO Clients 
-       (email, password, first_name, last_name, middle_name, company_id) 
-       VALUES ($1, $2, $3, $4, $5, $6) 
-       RETURNING *`,
-      [email, hashedPassword, first_name, last_name, middle_name, companyId]
+       (email, password, first_name, last_name, middle_name, company_id, phone) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) 
+       RETURNING *,
+      (SELECT name FROM Companies WHERE id = $6) AS company`,
+      [email, hashedPassword, first_name, last_name, middle_name, companyId, phone]
     )
 
     // 5. Генерация токена
@@ -91,8 +93,11 @@ const login = async (req, res, next) => {
   try {
     // 1. Поиск пользователя
     const user = await pool.query(
-      `SELECT id, email, password, first_name, last_name 
-       FROM Clients WHERE email = $1`,
+      `SELECT Clients.*, Companies.name as company
+       FROM Clients
+       INNER JOIN Companies 
+       ON Clients.company_id = Companies.id
+       WHERE email = $1`,
       [email]
     )
 
@@ -103,15 +108,15 @@ const login = async (req, res, next) => {
     // 2. Проверка пароля
     const isValidPassword = await bcrypt.compare(
       password, 
-      user.rows[0].password_hash
-    )
+      user.rows[0].password
+    );
 
     if (!isValidPassword) {
-      return res.status(401).json({ error: 'Неверные учетные данные' })
+      return res.status(401).json({ error: 'Неверные учетные данные' });
     }
 
     // 3. Генерация токена
-    const token = generateToken(user.rows[0].id)
+    const token = generateToken(user.rows[0].id);
 
     res.json({
       token,
@@ -120,7 +125,10 @@ const login = async (req, res, next) => {
         email: user.rows[0].email,
         first_name: user.rows[0].first_name,
         last_name: user.rows[0].last_name,
-        company_id: user.rows[0].company_id
+        middle_name: user.rows[0].middle_name,
+        company_id: user.rows[0].company_id,
+        company: user.rows[0].company,
+        phone: user.rows[0].phone
       }
     })
 
