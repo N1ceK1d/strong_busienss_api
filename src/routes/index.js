@@ -7,6 +7,9 @@ const app = express();
 
 router.get('/get_tests', test_controller.get_tests);
 router.get('/get_questions/:test_id', test_controller.get_questions);
+
+router.get('/get_OCA_results/:company_id', test_controller.get_OCA_test);
+
 router.post('/login', auth_controller.login);
 router.post('/register', auth_controller.register);
 router.post('/save_answers', test_controller.save_answers);

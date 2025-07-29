@@ -1,6 +1,72 @@
 const pool = require('../config/db');
 
 class Tests {
+    async get_OCATest(company_id) {
+    try {
+        // 1. Получаем параметры теста
+        const paramsQuery = `
+            SELECT 
+                Params.id,
+                Params.name
+            FROM Params
+            JOIN Questions ON Questions.param_id = Params.id
+            WHERE Questions.test_id = 4
+            GROUP BY Params.id, Params.name
+            ORDER BY Params.id
+        `;
+        const paramsResult = await pool.query(paramsQuery);
+
+        // 2. Получаем пользователей компании
+        const usersQuery = `
+            SELECT 
+                Users.id as user_id, 
+                Users.gender as gender,
+                Users.test_time as test_time,
+                CONCAT(Users.second_name, ' ', Users.first_name) as fullname
+            FROM Users
+            WHERE company_id = $1
+            ORDER BY Users.test_time
+        `;
+        const usersResult = await pool.query(usersQuery, [company_id]);
+
+        // 3. Получаем баллы по категориям для каждого пользователя
+        const scoresQuery = `
+            SELECT 
+                ua.user_id,
+                q.param_id,
+                SUM(a.points) as total_score
+            FROM UsersAnswer ua
+            JOIN Answers a ON ua.answer_id = a.id
+            JOIN Questions q ON a.question_id = q.id
+            JOIN Users u ON ua.user_id = u.id
+            WHERE q.test_id = 4
+              AND u.company_id = $1
+            GROUP BY ua.user_id, q.param_id
+            ORDER BY ua.user_id, q.param_id
+        `;
+        const scoresResult = await pool.query(scoresQuery, [company_id]);
+
+        // 4. Формируем структуру результатов
+        const scores = {};
+        scoresResult.rows.forEach(row => {
+            if (!scores[row.param_id]) {
+                scores[row.param_id] = {};
+            }
+            scores[row.param_id][row.user_id] = row.total_score;
+        });
+
+        // 5. Возвращаем результат
+        return {
+            users: usersResult.rows,
+            params: paramsResult.rows,
+            scores: scores
+        };
+    } catch (error) {
+        console.error('Error in get_OCATest:', error);
+        throw error;
+    }
+}
+
     async get_tests(){
         const sql = `
         SELECT Tests.*, 
