@@ -1,8 +1,70 @@
 const pool = require('../config/db');
+const {calculate_points} = require('../utils/calculatePoints');
 
 class Tests {
-    async get_OCATest(company_id) {
+
+    async get_ToneScale(company_id) {
     try {
+        const query = `
+            SELECT 
+                ua.user_id,
+                a.question_id,
+                a.answer,
+                q.param_id
+            FROM UsersAnswer ua
+            JOIN Answers a ON ua.answer_id = a.id
+            JOIN Questions q ON a.question_id = q.id
+            JOIN Tests t ON q.test_id = t.id
+            WHERE t.id = 5
+            AND ua.user_id IN (
+                SELECT id FROM Users WHERE company_id = 1
+            )
+            ORDER BY ua.user_id, q.id
+        `;
+
+        const { rows } = await pool.query(query);
+
+        if (!rows.length) {
+            return { success: true, data: {} };
+        }
+
+        const usersResults = {};
+        rows.forEach(row => {
+            const userId = row.user_id;
+            const paramId = row.param_id;
+            const answer = row.answer;
+
+            if (!usersResults[userId]) {
+                usersResults[userId] = {};
+            }
+            if (!usersResults[userId][paramId]) {
+                usersResults[userId][paramId] = [];
+            }
+            usersResults[userId][paramId].push(answer);
+        });
+
+        const results = {};
+        for (const userId in usersResults) {
+            // Дожидаемся разрешения Promise
+            results[userId] = await calculate_points(usersResults[userId]);
+        }
+
+        return {
+            success: true,
+            data: results
+        };
+
+    } catch (error) {
+        console.error("Error in get_ToneScale:", error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+    async get_OCATest(company_id) {
+        try {
         // 1. Получаем параметры теста
         const paramsQuery = `
             SELECT 

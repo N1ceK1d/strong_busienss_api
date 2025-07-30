@@ -45,7 +45,18 @@ exports.save_answers = async (req, res, next) => {
 exports.get_OCA_test = async (req, res, next) => {
     const company_id = req.params.company_id;
     try {
-        const result = await test_service.get_OCATest(company_id)
+        const result = await test_service.get_OCATest(company_id);
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+}
+
+exports.get_ToneScale = async (req, res, next) => {
+    const company_id = req.params.company_id;
+    try {
+        const result = await test_service.get_ToneScale(company_id);
+        console.log(result)
         res.json(result);
     } catch (error) {
         next(error);
