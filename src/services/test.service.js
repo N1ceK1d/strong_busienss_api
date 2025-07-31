@@ -3,6 +3,98 @@ const {calculate_points} = require('../utils/calculatePoints');
 
 class Tests {
 
+async get_motivation(company_id) {
+    try {
+        const sql = `
+            WITH user_answers AS (
+                SELECT 
+                    u.id AS user_id,
+                    CASE 
+                        WHEN u.is_anon THEN 'Аноним'
+                        ELSE COALESCE(CONCAT(u.second_name, ' ', u.first_name), 'Без имени') 
+                    END AS user_name,
+                    u.is_anon,
+                    a.id AS answer_id,
+                    a.answer AS answer_text,
+                    a.points,
+                    ROW_NUMBER() OVER (PARTITION BY u.id ORDER BY ua.id) AS priority
+                FROM Users u
+                JOIN UsersAnswer ua ON ua.user_id = u.id
+                JOIN Answers a ON ua.answer_id = a.id
+                JOIN Questions q ON a.question_id = q.id
+                WHERE q.id = 526 AND u.company_id = $1
+            )
+            SELECT 
+                user_id,
+                user_name,
+                is_anon,
+                JSON_AGG(
+                    JSON_BUILD_OBJECT(
+                        'answer_id', answer_id,
+                        'answer_text', answer_text,
+                        'points', points,
+                        'priority', priority
+                    )
+                    ORDER BY priority ASC
+                ) AS prioritized_answers
+            FROM user_answers
+            WHERE priority <= 3
+            GROUP BY user_id, user_name, is_anon
+            ORDER BY is_anon, user_name
+        `;
+        const { rows } = await pool.query(sql, [company_id]);
+        return rows;
+    } catch (error) {
+        console.error(error);
+        throw error;
+    }
+}
+
+    async get_IQTest(company_id) {
+    try {
+        const sql = `
+            SELECT 
+                u.id as user_id,
+                CONCAT(u.second_name, ' ', u.first_name) as fullname,
+                u.gender,
+                SUM(a.points) as test_points,
+                (SUM(a.points) + CASE WHEN u.gender = true THEN 75 ELSE 70 END) as total_points
+            FROM 
+                Users u
+            JOIN 
+                UsersAnswer ur ON u.id = ur.user_id
+            JOIN 
+                Answers a ON ur.answer_id = a.id
+            JOIN 
+                Questions q ON a.question_id = q.id
+            WHERE 
+                q.test_id = 3
+                AND u.company_id = $1
+            GROUP BY 
+                u.id, u.second_name, u.first_name, u.gender
+            ORDER BY 
+                total_points DESC
+        `;
+
+        const { rows } = await pool.query(sql, [company_id]);
+        
+        return rows.map(user => ({
+            user_data: {
+                id: user.user_id,
+                fullname: user.fullname,
+                gender: user.gender,
+                points: user.total_points,
+                test_date: user.test_date
+            }
+        }));
+
+    } catch (error) {
+        console.error('Error in get_IQTest:', error);
+        throw new Error('Failed to fetch IQ test results');
+    }
+}
+
+
     async get_ToneScale(company_id) {
     try {
         const query = `

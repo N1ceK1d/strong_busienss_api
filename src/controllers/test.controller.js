@@ -62,3 +62,37 @@ exports.get_ToneScale = async (req, res, next) => {
         next(error);
     }
 }
+
+exports.get_IQ_result = async (req, res, next) => {
+    const company_id = req.params.company_id;
+    try {
+        const result = await test_service.get_IQTest(company_id);
+        console.log(result)
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+}
+
+exports.get_motivations = async (req, res, next) => {
+    const company_id = req.params.company_id;
+    try {
+        const result = await test_service.get_motivation(company_id);
+        
+        // Форматируем результат для более удобного представления
+        const formattedResult = result.map(user => ({
+            user_id: user.user_id,
+            user_name: user.user_name,
+            motivations: user.prioritized_answers.map(answer => ({
+                id: answer.answer_id,
+                text: answer.answer_text,
+                points: answer.points,
+                priority: answer.priority
+            }))
+        }));
+        
+        res.json(formattedResult);
+    } catch (error) {
+        next(error);
+    }
+}
