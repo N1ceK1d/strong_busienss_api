@@ -8,6 +8,7 @@ class Tests {
         const query = `
             SELECT 
                 ua.user_id,
+                CONCAT(u.second_name, ' ', u.first_name) as fullname,
                 a.question_id,
                 a.answer,
                 q.param_id
@@ -15,6 +16,7 @@ class Tests {
             JOIN Answers a ON ua.answer_id = a.id
             JOIN Questions q ON a.question_id = q.id
             JOIN Tests t ON q.test_id = t.id
+            JOIN Users u ON ua.user_id = u.id
             WHERE t.id = 5
             AND ua.user_id IN (
                 SELECT id FROM Users WHERE company_id = 1
@@ -29,24 +31,39 @@ class Tests {
         }
 
         const usersResults = {};
+        const userNames = {}; // Отдельный объект для хранения имён
+        
         rows.forEach(row => {
             const userId = row.user_id;
+            const userFullname = row.fullname;
             const paramId = row.param_id;
             const answer = row.answer;
 
+            // Сохраняем имя пользователя
+            userNames[userId] = userFullname;
+
+            // Инициализируем структуру для ответов, если её ещё нет
             if (!usersResults[userId]) {
-                usersResults[userId] = {};
+                usersResults[userId] = {
+                    answers: {},
+                    fullname: userFullname
+                };
             }
-            if (!usersResults[userId][paramId]) {
-                usersResults[userId][paramId] = [];
+
+            // Добавляем ответы по категориям
+            if (!usersResults[userId].answers[paramId]) {
+                usersResults[userId].answers[paramId] = [];
             }
-            usersResults[userId][paramId].push(answer);
+            usersResults[userId].answers[paramId].push(answer);
         });
 
         const results = {};
         for (const userId in usersResults) {
-            // Дожидаемся разрешения Promise
-            results[userId] = await calculate_points(usersResults[userId]);
+            // Вычисляем результат и сохраняем вместе с именем
+            results[userId] = {
+                fullname: usersResults[userId].fullname,
+                level: await calculate_points(usersResults[userId].answers)
+            };
         }
 
         return {
