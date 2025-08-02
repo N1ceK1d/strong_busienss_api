@@ -1,22 +1,24 @@
 function moreYes(list) {
-    if (!list || list.length === 0) return 0; // Защита от пустых списков
-    
+    if (!list || list.length === 0) return false; // Возвращаем false для пустых списков
+
     let yes = 0;
     let no = 0;
 
     for (const answer of list) {
-        if (answer == 1) {
+        if (answer == 'Да') {
             yes++;
         } else {
             no++;
         }
     }
-    return yes >= no ? 1 : 0;
+    return yes > no; // Строго больше, а не больше или равно
 }
 
 exports.calculate_points = async (userAnswers) => {
-    // userAnswers - это объект с группированными ответами по param_id
-    // Пример: { '25': [1, 0, 1], '26': [0, 1, 1], ... }
+    // Проверяем, что userAnswers существует и не пустой
+    if (!userAnswers || Object.keys(userAnswers).length === 0) {
+        return '0.0';
+    }
 
     // Приводим ключи param_id к строковому виду для единообразия
     const types = {};
@@ -24,38 +26,42 @@ exports.calculate_points = async (userAnswers) => {
         types[paramId.toString()] = answers;
     }
 
-    let res = '0.0'; // Значение по умолчанию
+    // Проверяем наличие всех необходимых параметров
+    const requiredParams = ['25', '26', '27', '28', '29', '30', '31'];
+    for (const param of requiredParams) {
+        if (!types[param] || types[param].length === 0) {
+            return '0.0'; // Если какой-то параметр отсутствует, возвращаем минимальное значение
+        }
+    }
 
-    // Модифицированная логика для работы с param_id 25-31 вместо 1-7
-    if (moreYes(types['25'])) { // Было types['1']
-        if (moreYes(types['26'])) { // Было types['2']
-            if (moreYes(types['28'])) { // Было types['4']
-                res = '3.6-4.0';
+    // Модифицированная логика определения уровня
+    if (moreYes(types['25'])) {
+        if (moreYes(types['26'])) {
+            if (moreYes(types['28'])) {
+                return '3.6-4.0';
             } else {
-                res = '3.1-3.5';
+                return '3.1-3.5';
             }
         } else {
-            if (moreYes(types['30'])) { // Было types['6']
-                res = '2.6-3.0';
+            if (moreYes(types['30'])) {
+                return '2.6-3.0';
             } else {
-                res = '2.1-2.5';
+                return '2.1-2.5';
             }
         }
     } else {
-        if (moreYes(types['27'])) { // Было types['3']
-            if (moreYes(types['29'])) { // Было types['5']
-                res = '1.5-2.0';
+        if (moreYes(types['27'])) {
+            if (moreYes(types['29'])) {
+                return '1.5-2.0';
             } else {
-                res = '1.1-1.4';
+                return '1.1-1.4';
             }
         } else {
-            if (moreYes(types['31'])) { // Было types['7']
-                res = '0.6-1.0';
+            if (moreYes(types['31'])) {
+                return '0.6-1.0';
             } else {
-                res = '0.1-0.5';
+                return '0.1-0.5';
             }
         }
     }
-    
-    return res;
 };

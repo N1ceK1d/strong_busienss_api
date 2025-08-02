@@ -389,13 +389,13 @@ async get_directors(company_id) {
         let sql;
         let params = [];
 
-        
+
         if(user_data && user_data.firstName) {
             sql = `
             INSERT INTO Users 
                 (first_name, second_name, last_name, post_position, gender, is_anon, test_time, company_id, is_director)
             VALUES 
-                ($1, $2, $3, $4, $5, false, NOW(), 1, $6)
+                ($1, $2, $3, $4, $5, false, NOW(), $7, $6)
             RETURNING id`;
             
             params = [
@@ -404,15 +404,18 @@ async get_directors(company_id) {
                 user_data.middleName,
                 user_data.position,
                 user_data.gender,
-                user_data.isDirector || false
+                user_data.isDirector || false,
+                user_data.company_id
             ];
         } else {
             sql = `
             INSERT INTO Users 
                 (is_anon, test_time, company_id)
             VALUES 
-                (true, NOW(), 1)
+                (true, NOW(), $1)
             RETURNING id`;
+
+            params = [user_data.companyId]
         }
 
         // Выполняем запрос для создания пользователя
