@@ -96,3 +96,33 @@ exports.get_motivations = async (req, res, next) => {
         next(error);
     }
 }
+
+exports.get_employee = async (req, res, next) => {
+    const company_id = req.params.company_id;
+    try {
+        const result = await test_service.get_employee(company_id);
+        console.log(result);
+        res.status(200).json({
+            success: true,
+            data: result
+        });
+    } catch (error) {
+        console.error('Error in get_employee controller:', error);
+        next(error);
+    }
+};
+
+exports.get_directors = async (req, res, next) => {
+    const company_id = req.params.company_id;
+    try {
+        const result = await test_service.get_directors(company_id);
+        console.log(result);
+        res.status(200).json({
+            success: true,
+            data: result
+        });
+    } catch (error) {
+        console.error('Error in get_directors controller:', error);
+        next(error);
+    }
+};

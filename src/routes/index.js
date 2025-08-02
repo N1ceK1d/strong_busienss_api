@@ -12,6 +12,8 @@ router.get('/get_OCA_results/:company_id', test_controller.get_OCA_test);
 router.get('/get_ToneScale/:company_id', test_controller.get_ToneScale);
 router.get('/get_iq_results/:company_id', test_controller.get_IQ_result);
 router.get('/get_motivations/:company_id', test_controller.get_motivations);
+router.get('/get_directors/:company_id', test_controller.get_directors);
+router.get('/get_employee/:company_id', test_controller.get_employee);
 
 router.post('/login', auth_controller.login);
 router.post('/register', auth_controller.register);

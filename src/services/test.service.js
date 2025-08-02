@@ -3,56 +3,174 @@ const {calculate_points} = require('../utils/calculatePoints');
 
 class Tests {
 
-async get_motivation(company_id) {
-    try {
-        const sql = `
-            WITH user_answers AS (
-                SELECT 
-                    u.id AS user_id,
-                    CASE 
-                        WHEN u.is_anon THEN 'Аноним'
-                        ELSE COALESCE(CONCAT(u.second_name, ' ', u.first_name), 'Без имени') 
-                    END AS user_name,
-                    u.is_anon,
-                    a.id AS answer_id,
-                    a.answer AS answer_text,
-                    a.points,
-                    ROW_NUMBER() OVER (PARTITION BY u.id ORDER BY ua.id) AS priority
-                FROM Users u
-                JOIN UsersAnswer ua ON ua.user_id = u.id
-                JOIN Answers a ON ua.answer_id = a.id
-                JOIN Questions q ON a.question_id = q.id
-                WHERE q.id = 526 AND u.company_id = $1
-            )
-            SELECT 
-                user_id,
-                user_name,
-                is_anon,
-                JSON_AGG(
-                    JSON_BUILD_OBJECT(
-                        'answer_id', answer_id,
-                        'answer_text', answer_text,
-                        'points', points,
-                        'priority', priority
-                    )
-                    ORDER BY priority ASC
-                ) AS prioritized_answers
-            FROM user_answers
-            WHERE priority <= 3
-            GROUP BY user_id, user_name, is_anon
-            ORDER BY is_anon, user_name
-        `;
-        const { rows } = await pool.query(sql, [company_id]);
-        return rows;
-    } catch (error) {
-        console.error(error);
-        throw error;
-    }
+async get_employee(company_id) {
+  const query = `
+    SELECT 
+      u.id AS user_id,
+      CASE 
+        WHEN u.is_anon THEN 'Аноним'
+        ELSE COALESCE(CONCAT(u.second_name, ' ', u.first_name), 'Без имени') 
+      END AS fullname,
+      u.gender,
+      p.id AS param_id,
+      p.name AS param_name,
+      SUM(a.points) AS param_score
+    FROM 
+      Users u
+    JOIN 
+      UsersAnswer ua ON u.id = ua.user_id
+    JOIN 
+      Answers a ON ua.answer_id = a.id
+    JOIN 
+      Questions q ON a.question_id = q.id
+    JOIN 
+      Params p ON q.param_id = p.id
+    WHERE 
+      u.is_director = false AND
+      u.company_id = $1 AND 
+      q.test_id = 1
+    GROUP BY 
+      u.id, fullname, u.gender, p.id, p.name
+    ORDER BY 
+      u.id, p.id;
+  `;
+
+  try {
+    const { rows } = await pool.query(query, [company_id]);
+    
+    // Группируем результаты по пользователям
+    const result = {};
+    rows.forEach(row => {
+      if (!result[row.user_id]) {
+        result[row.user_id] = {
+          user_id: row.user_id,
+          fullname: row.fullname,
+          gender: row.gender,
+          params: {}
+        };
+      }
+      result[row.user_id].params[row.param_id] = {
+        param_name: row.param_name,
+        score: row.param_score
+      };
+    });
+    
+    return Object.values(result);
+  } catch (error) {
+    console.error('Error fetching employee scores with details:', error);
+    throw error;
+  }
 }
 
+async get_directors(company_id) {
+  const query = `
+    SELECT 
+      u.id AS user_id,
+      CASE 
+            WHEN u.is_anon THEN 'Аноним'
+            ELSE COALESCE(CONCAT(u.second_name, ' ', u.first_name), 'Без имени') 
+        END AS fullname,
+      u.gender,
+      p.id AS param_id,
+      p.name AS param_name,
+      SUM(a.points) AS param_score
+    FROM 
+      Users u
+    JOIN 
+      UsersAnswer ua ON u.id = ua.user_id
+    JOIN 
+      Answers a ON ua.answer_id = a.id
+    JOIN 
+      Questions q ON a.question_id = q.id
+    JOIN 
+      Params p ON q.param_id = p.id
+    WHERE 
+      u.is_director = true AND
+      u.company_id = ${company_id} AND 
+      q.test_id = 1
+    GROUP BY 
+      u.id, fullname, u.gender, p.id, p.name
+    ORDER BY 
+      u.id, p.id;
+  `;
+
+  try {
+    const { rows } = await pool.query(query);
+    
+    // Группируем результаты по пользователям
+    const result = {};
+    rows.forEach(row => {
+      if (!result[row.user_id]) {
+        result[row.user_id] = {
+          user_id: row.user_id,
+          fullname: row.fullname,
+          gender: row.gender,
+          params: {}
+        };
+      }
+      result[row.user_id].params[row.param_id] = {
+        param_name: row.param_name,
+        score: row.param_score
+      };
+    });
+    
+    return Object.values(result);
+  } catch (error) {
+    console.error('Error fetching director scores with details:', error);
+    throw error;
+  }
+}
+
+    async get_motivation(company_id) {
+        try {
+            const sql = `
+                WITH user_answers AS (
+                    SELECT 
+                        u.id AS user_id,
+                        CASE 
+                            WHEN u.is_anon THEN 'Аноним'
+                            ELSE COALESCE(CONCAT(u.second_name, ' ', u.first_name), 'Без имени') 
+                        END AS user_name,
+                        u.is_anon,
+                        a.id AS answer_id,
+                        a.answer AS answer_text,
+                        a.points,
+                        ROW_NUMBER() OVER (PARTITION BY u.id ORDER BY ua.id) AS priority
+                    FROM Users u
+                    JOIN UsersAnswer ua ON ua.user_id = u.id
+                    JOIN Answers a ON ua.answer_id = a.id
+                    JOIN Questions q ON a.question_id = q.id
+                    WHERE q.id = 526 AND u.company_id = $1
+                )
+                SELECT 
+                    user_id,
+                    user_name,
+                    is_anon,
+                    JSON_AGG(
+                        JSON_BUILD_OBJECT(
+                            'answer_id', answer_id,
+                            'answer_text', answer_text,
+                            'points', points,
+                            'priority', priority
+                        )
+                        ORDER BY priority ASC
+                    ) AS prioritized_answers
+                FROM user_answers
+                WHERE priority <= 3
+                GROUP BY user_id, user_name, is_anon
+                ORDER BY is_anon, user_name
+            `;
+            const { rows } = await pool.query(sql, [company_id]);
+            return rows;
+        } catch (error) {
+            console.error(error);
+            throw error;
+        }
+    }
+
     async get_IQTest(company_id) {
-    try {
-        const sql = `
+        try {
+            const sql = `
             SELECT 
                 u.id as user_id,
                 CONCAT(u.second_name, ' ', u.first_name) as fullname,
@@ -88,11 +206,11 @@ async get_motivation(company_id) {
             }
         }));
 
-    } catch (error) {
-        console.error('Error in get_IQTest:', error);
-        throw new Error('Failed to fetch IQ test results');
+        } catch (error) {
+            console.error('Error in get_IQTest:', error);
+            throw new Error('Failed to fetch IQ test results');
+        }
     }
-}
 
 
     async get_ToneScale(company_id) {
@@ -111,7 +229,7 @@ async get_motivation(company_id) {
             JOIN Users u ON ua.user_id = u.id
             WHERE t.id = 5
             AND ua.user_id IN (
-                SELECT id FROM Users WHERE company_id = 1
+                SELECT id FROM Users WHERE company_id = ${company_id}
             )
             ORDER BY ua.user_id, q.id
         `;
@@ -189,13 +307,17 @@ async get_motivation(company_id) {
 
         // 2. Получаем пользователей компании
         const usersQuery = `
-            SELECT 
+            SELECT DISTINCT
                 Users.id as user_id, 
                 Users.gender as gender,
                 Users.test_time as test_time,
                 CONCAT(Users.second_name, ' ', Users.first_name) as fullname
             FROM Users
-            WHERE company_id = $1
+            JOIN UsersAnswer ON UsersAnswer.user_id = Users.id
+            JOIN Answers ON UsersAnswer.answer_id = Answers.id
+            JOIN Questions ON Answers.question_id = Questions.id
+            WHERE Users.company_id = $1
+              AND Questions.test_id = 4
             ORDER BY Users.test_time
         `;
         const usersResult = await pool.query(usersQuery, [company_id]);
@@ -266,13 +388,14 @@ async get_motivation(company_id) {
     try {
         let sql;
         let params = [];
+
         
         if(user_data && user_data.firstName) {
             sql = `
             INSERT INTO Users 
-                (first_name, second_name, last_name, post_position, gender, is_anon, test_time, company_id)
+                (first_name, second_name, last_name, post_position, gender, is_anon, test_time, company_id, is_director)
             VALUES 
-                ($1, $2, $3, $4, $5, false, NOW(), 1)
+                ($1, $2, $3, $4, $5, false, NOW(), 1, $6)
             RETURNING id`;
             
             params = [
@@ -280,7 +403,8 @@ async get_motivation(company_id) {
                 user_data.lastName || '', // Добавляем на случай отсутствия
                 user_data.middleName,
                 user_data.position,
-                user_data.gender
+                user_data.gender,
+                user_data.isDirector || false
             ];
         } else {
             sql = `
