@@ -371,7 +371,18 @@ async get_directors(company_id) {
 
     async get_questions(test_id) {
         const sql = `
-        SELECT * FROM Questions WHERE test_id = $1
+        SELECT 
+            q.*,
+            qi.id as image_id,
+            qi.image_path
+        FROM 
+            Questions q
+        LEFT JOIN 
+            questionimages qi ON q.id = qi.question_id
+        WHERE 
+            q.test_id = $1
+        ORDER BY 
+            q.id;
         `;
         const {rows} = await pool.query(sql, [test_id]);
         return rows;

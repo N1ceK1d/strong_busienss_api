@@ -2,8 +2,14 @@ const express = require('express');
 const router = express.Router();
 const test_controller = require('../controllers/test.controller');
 const auth_controller = require('../controllers/auth.controller');
+const client_controller = require('../controllers/client.controller');
+const tariff_controller = require('../controllers/tariff.controller');
+const tariff_middleware = require('../middleware/tariff');
+const auth_middleware = require('../middleware/auth');
 
 const app = express();
+
+// router.use(tariff_middleware);
 
 router.get('/get_tests', test_controller.get_tests);
 router.get('/get_questions/:test_id', test_controller.get_questions);
@@ -15,9 +21,16 @@ router.get('/get_motivations/:company_id', test_controller.get_motivations);
 router.get('/get_directors/:company_id', test_controller.get_directors);
 router.get('/get_employee/:company_id', test_controller.get_employee);
 
+router.get('/tariffs', tariff_controller.getTariffs);
+router.post('/tariffs/buy', auth_middleware, tariff_controller.buyTariff);
+router.get('/tariffs/check', auth_middleware, tariff_controller.checkTariff);
+router.get('/user/:user_id/tariff', tariff_controller.getTariffs);
+
 router.post('/login', auth_controller.login);
 router.post('/register', auth_controller.register);
 router.post('/save_answers', test_controller.save_answers);
+router.put('/update_user/:user_id', client_controller.updateData);
+router.get('/get_user_data/:user_id', client_controller.getData);
 
 module.exports = router;
 

@@ -32,6 +32,48 @@ CREATE TABLE Companies (
     name VARCHAR (255) NOT NULL
 );
 
+CREATE TABLE Tariffs (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    price DECIMAL(10, 2) NOT NULL,
+    duration_days INTEGER NOT NULL,  -- срок действия в днях
+    max_users INTEGER,               -- максимальное количество пользователей
+    allow_anonymous BOOLEAN DEFAULT FALSE,
+    has_analytics BOOLEAN DEFAULT FALSE,
+    has_support BOOLEAN DEFAULT FALSE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ClientTariffs (
+    id SERIAL PRIMARY KEY,
+    client_id INTEGER NOT NULL REFERENCES Clients(id) ON DELETE CASCADE,
+    tariff_id INTEGER NOT NULL REFERENCES tariffs(id),
+    purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    start_date TIMESTAMP NOT NULL,         -- дата начала действия
+    end_date TIMESTAMP NOT NULL,           -- дата окончания
+    price_paid DECIMAL(10, 2) NOT NULL,    -- фактически оплаченная сумма
+    has_consultant BOOLEAN DEFAULT FALSE,  -- включен ли консультант
+    payment_status VARCHAR(20) DEFAULT 'pending', -- pending/paid/failed/refunded
+    payment_method VARCHAR(50),            -- способ оплаты
+    transaction_id VARCHAR(100),           -- ID транзакции в платежной системе
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE TariffFeatures (
+    id SERIAL PRIMARY KEY,
+    tariff_id INTEGER NOT NULL REFERENCES tariffs(id) ON DELETE CASCADE,
+    feature_name VARCHAR(100) NOT NULL,
+    feature_value TEXT,
+    is_limited BOOLEAN DEFAULT FALSE,
+    limit_value INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE Users (
 	id SERIAL NOT NULL PRIMARY KEY ,
     first_name VARCHAR(255) NULL,

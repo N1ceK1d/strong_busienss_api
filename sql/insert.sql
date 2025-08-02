@@ -1,6 +1,19 @@
 INSERT INTO Tests (name, description)
 VALUES ('Анализ потенциала', ''), ('Мотивация персонала', ''), ('IQ тест', ''), ('тест OCA', ''), ('Тест тонов', '');
 
+INSERT INTO Tariffs (name, description, price, duration_days, max_users, allow_anonymous, has_analytics, has_support)
+VALUES 
+('Базовый', 'Доступ к основным тестам', 5000.00, 30, 10, FALSE, FALSE, FALSE),
+('Профессиональный', 'Расширенная аналитика', 10000.00, 30, 50, TRUE, TRUE, FALSE),
+('Корпоративный', 'Полный доступ для компании', 25000.00, 30, 200, TRUE, TRUE, TRUE);
+
+INSERT INTO TariffFeatures (tariff_id, feature_name, feature_value, is_limited, limit_value)
+VALUES
+(1, 'Количество тестов', '5', TRUE, 5),
+(2, 'Экспорт в PDF', 'Доступен', FALSE, NULL),
+(2, 'Глубина аналитики', 'Расширенная', FALSE, NULL),
+(3, 'Приоритетная поддержка', '24/7', FALSE, NULL);
+
 INSERT INTO Params (id, name)
 VALUES
 (1, 'А - Организованность / Стабильность / Целеустремлённость'),
