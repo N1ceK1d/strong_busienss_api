@@ -36,10 +36,22 @@ exports.save_answers = async (req, res, next) => {
     try {
         const result = await test_service.save_answers(userData, answers);
         console.log('Answers saved successfully', result);
+        res.status(200).send('');
     } catch (error) {
         console.error('Failed to save answers', error);
     }
     
+}
+
+exports.delete_answers = async (req, res, next) => {
+    try {
+        console.log(req.body)
+        const {user_id} = req.body;
+        const result = await test_service.delete_user_answers(user_id);
+        res.status(200).json({ success: true });
+    } catch (error) {
+        next(error);
+    }
 }
 
 exports.get_OCA_test = async (req, res, next) => {

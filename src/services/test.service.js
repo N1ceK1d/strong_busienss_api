@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { delete_answers } = require('../controllers/test.controller');
 const {calculate_points} = require('../utils/calculatePoints');
 
 class Tests {
@@ -6,37 +7,38 @@ class Tests {
 async get_employee(company_id) {
   const query = `
     SELECT 
-      u.id AS user_id,
-      CASE 
-        WHEN u.is_anon THEN 'Аноним'
-        ELSE COALESCE(CONCAT(u.second_name, ' ', u.first_name), 'Без имени') 
-      END AS fullname,
-      u.gender,
-      p.id AS param_id,
-      p.name AS param_name,
-      SUM(a.points) AS param_score
-    FROM 
-      Users u
-    JOIN 
-      UsersAnswer ua ON u.id = ua.user_id
-    JOIN 
-      Answers a ON ua.answer_id = a.id
-    JOIN 
-      Questions q ON a.question_id = q.id
-    JOIN 
-      Params p ON q.param_id = p.id
-    WHERE 
-      u.is_director = false AND
-      u.company_id = $1 AND 
-      q.test_id = 1
-    GROUP BY 
-      u.id, fullname, u.gender, p.id, p.name
-    ORDER BY 
-      u.id, p.id;
+  u.id AS user_id,
+  CASE 
+    WHEN u.is_anon = true THEN 'Аноним'
+    ELSE COALESCE(CONCAT(u.second_name, ' ', u.first_name), 'Без имени') 
+  END AS fullname,
+  u.gender,
+  u.post_position,
+  p.id AS param_id,
+  p.name AS param_name,
+  SUM(a.points) AS param_score
+FROM 
+  Users u
+JOIN 
+  UsersAnswer ua ON u.id = ua.user_id
+JOIN 
+  Answers a ON ua.answer_id = a.id
+JOIN 
+  Questions q ON a.question_id = q.id
+JOIN 
+  Params p ON q.param_id = p.id
+WHERE 
+  (u.is_director = false OR u.is_director IS NULL) AND
+  u.company_id = ${company_id} AND 
+  q.test_id = 1
+GROUP BY 
+  u.id, fullname, u.gender, p.id, p.name
+ORDER BY 
+  u.id, p.id;
   `;
 
   try {
-    const { rows } = await pool.query(query, [company_id]);
+    const { rows } = await pool.query(query);
     
     // Группируем результаты по пользователям
     const result = {};
@@ -46,6 +48,7 @@ async get_employee(company_id) {
           user_id: row.user_id,
           fullname: row.fullname,
           gender: row.gender,
+          post_position: row.post_position,
           params: {}
         };
       }
@@ -65,33 +68,34 @@ async get_employee(company_id) {
 async get_directors(company_id) {
   const query = `
     SELECT 
-      u.id AS user_id,
-      CASE 
-            WHEN u.is_anon THEN 'Аноним'
-            ELSE COALESCE(CONCAT(u.second_name, ' ', u.first_name), 'Без имени') 
-        END AS fullname,
-      u.gender,
-      p.id AS param_id,
-      p.name AS param_name,
-      SUM(a.points) AS param_score
-    FROM 
-      Users u
-    JOIN 
-      UsersAnswer ua ON u.id = ua.user_id
-    JOIN 
-      Answers a ON ua.answer_id = a.id
-    JOIN 
-      Questions q ON a.question_id = q.id
-    JOIN 
-      Params p ON q.param_id = p.id
-    WHERE 
-      u.is_director = true AND
-      u.company_id = ${company_id} AND 
-      q.test_id = 1
-    GROUP BY 
-      u.id, fullname, u.gender, p.id, p.name
-    ORDER BY 
-      u.id, p.id;
+  u.id AS user_id,
+  CASE 
+    WHEN u.is_anon = true THEN 'Аноним'
+    ELSE COALESCE(CONCAT(u.second_name, ' ', u.first_name), 'Без имени') 
+  END AS fullname,
+  u.gender,
+  u.post_position,
+  p.id AS param_id,
+  p.name AS param_name,
+  SUM(a.points) AS param_score
+FROM 
+  Users u
+JOIN 
+  UsersAnswer ua ON u.id = ua.user_id
+JOIN 
+  Answers a ON ua.answer_id = a.id
+JOIN 
+  Questions q ON a.question_id = q.id
+JOIN 
+  Params p ON q.param_id = p.id
+WHERE 
+  (u.is_director = true) AND
+  u.company_id = ${company_id} AND 
+  q.test_id = 1
+GROUP BY 
+  u.id, fullname, u.gender, p.id, p.name
+ORDER BY 
+  u.id, p.id;
   `;
 
   try {
@@ -105,6 +109,7 @@ async get_directors(company_id) {
           user_id: row.user_id,
           fullname: row.fullname,
           gender: row.gender,
+          post_position: row.post_position,
           params: {}
         };
       }
@@ -459,6 +464,20 @@ async get_directors(company_id) {
         throw error;
     }
 }
+
+    async delete_user_answers(user_id) {
+        try {
+            console.log(`USER ID: ${user_id}`);
+            const delete_answers = `DELETE FROM UsersAnswer WHERE user_id = ${user_id}`;
+            pool.query(delete_answers);
+            const delete_user = `DELETE FROM Users WHERE id = ${user_id}`;
+            pool.query(delete_user);
+            return 0;
+        } catch (error) {
+            console.error(error);
+            throw error;
+        }
+    }
 
 }
 

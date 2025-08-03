@@ -9,10 +9,9 @@ const auth_middleware = require('../middleware/auth');
 
 const app = express();
 
-// router.use(tariff_middleware);
-
 router.get('/get_tests', test_controller.get_tests);
 router.get('/get_questions/:test_id', test_controller.get_questions);
+router.delete('/delete_answers', test_controller.delete_answers);
 
 router.get('/get_OCA_results/:company_id', test_controller.get_OCA_test);
 router.get('/get_ToneScale/:company_id', test_controller.get_ToneScale);
@@ -29,8 +28,7 @@ router.get('/user/:user_id/tariff', tariff_controller.getTariffs);
 router.post('/login', auth_controller.login);
 router.post('/register', auth_controller.register);
 router.post('/save_answers', test_controller.save_answers);
-router.put('/update_user/:user_id', client_controller.updateData);
-router.get('/get_user_data/:user_id', client_controller.getData);
+router.put('/update_user', client_controller.updateData);
 
 module.exports = router;
 
