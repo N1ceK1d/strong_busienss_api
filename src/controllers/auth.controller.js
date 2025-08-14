@@ -1,111 +1,93 @@
-const pool = require('../config/db')
-const { generateToken } = require('../services/jwt')
-const bcrypt = require('bcryptjs')
+const pool = require('../config/db');
+const { generateToken } = require('../services/jwt');
+const bcrypt = require('bcryptjs');
 
-const register = async (req, res, next) => {
-  const { email, password, first_name, last_name, middle_name, company, phone } = req.body
+const register = async (req, res) => {
+  const { email, password, first_name, last_name, middle_name, company, phone } = req.body;
   
   try {
-    if (!email || !password || !first_name || !last_name) {
-      return res.status(400).json({ 
-        error: 'Все обязательные поля должны быть заполнены',
-        details: {
-          email: !email ? 'Требуется email' : undefined,
-          password: !password ? 'Требуется пароль' : undefined,
-          first_name: !first_name ? 'Требуется имя' : undefined,
-          last_name: !last_name ? 'Требуется фамилия' : undefined,
-          phone: !phone ? 'Требуется номер телефона' : undefined,
-        }
+    // Проверка обязательных полей
+    const requiredFields = ['email', 'password', 'first_name', 'last_name', 'phone'];
+    const missingFields = requiredFields.filter(field => !req.body[field]);
+    
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        error: 'Необходимо заполнить все обязательные поля',
+        missing: missingFields
       });
     }
-    // 1. Проверка существования пользователя
+
+    // Проверка существования пользователя
     const userExists = await pool.query(
       'SELECT id FROM Clients WHERE email = $1', 
       [email]
-    )
+    );
     
-     if (userExists.rows.length > 0) {
+    if (userExists.rows.length > 0) {
       return res.status(409).json({ 
-        error: 'Пользователь с таким email уже существует',
-        code: 'EMAIL_EXISTS'
+        error: 'Пользователь с таким email уже существует'
       });
     }
 
-    // 2. Хэширование пароля
-    const salt = await bcrypt.genSalt(10)
-    const hashedPassword = await bcrypt.hash(password, salt)
+    // Хэширование пароля
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 3. Создание компании (если указана)
-    let companyId = null
+    // Создание компании
+    let companyId = null;
     if (company) {
       const companyRes = await pool.query(
-             `WITH inserted_company AS (
-          INSERT INTO companies (name) 
-          VALUES ($1)
-          ON CONFLICT (name) DO NOTHING
-          RETURNING id
-        )
-        SELECT id FROM inserted_company
-        UNION
-        SELECT id FROM companies WHERE name = $1`,
+        `INSERT INTO companies (name) 
+         VALUES ($1) 
+         ON CONFLICT (name) DO NOTHING
+         RETURNING id`,
         [company]
-      )
-      companyId = companyRes.rows[0].id
+      );
+      companyId = companyRes.rows[0]?.id;
     }
 
-    // 4. Создание пользователя
+    // Создание пользователя
     const newUser = await pool.query(
       `INSERT INTO Clients 
        (email, password, first_name, last_name, middle_name, company_id, phone) 
        VALUES ($1, $2, $3, $4, $5, $6, $7) 
-       RETURNING *,
-      (SELECT name FROM Companies WHERE id = $6) AS company`,
+       RETURNING id, email, first_name, last_name, middle_name, company_id, phone`,
       [email, hashedPassword, first_name, last_name, middle_name, companyId, phone]
-    )
+    );
 
-    // 5. Генерация токена
-    const token = generateToken(newUser.rows[0].id)
+    // Генерация токена
+    const token = generateToken(newUser.rows[0].id);
 
     res.status(201).json({
       token,
       user: newUser.rows[0]
-    })
+    });
 
   } catch (err) {
-    // Логирование полной ошибки
-    console.error('Registration Error:', {
-      message: err.message,
-      stack: err.stack,
-      body: req.body
-    });
-    
-    // Отправка клиенту
+    console.error('Registration Error:', err);
     res.status(500).json({ 
-      error: 'Внутренняя ошибка сервера',
-      code: 'INTERNAL_ERROR'
+      error: 'Внутренняя ошибка сервера'
     });
   }
-}
+};
 
-const login = async (req, res, next) => {
-  const { email, password } = req.body
+const login = async (req, res) => {
+  const { email, password } = req.body;
 
   try {
-    // 1. Поиск пользователя
+    // Поиск пользователя
     const user = await pool.query(
       `SELECT Clients.*, Companies.name as company
        FROM Clients
-       INNER JOIN Companies 
-       ON Clients.company_id = Companies.id
+       LEFT JOIN Companies ON Clients.company_id = Companies.id
        WHERE email = $1`,
       [email]
-    )
+    );
 
     if (user.rows.length === 0) {
-      return res.status(401).json({ error: 'Неверные учетные данные' })
+      return res.status(401).json({ error: 'Неверные учетные данные' });
     }
 
-    // 2. Проверка пароля
+    // Проверка пароля
     const isValidPassword = await bcrypt.compare(
       password, 
       user.rows[0].password
@@ -115,26 +97,27 @@ const login = async (req, res, next) => {
       return res.status(401).json({ error: 'Неверные учетные данные' });
     }
 
-    // 3. Генерация токена
+    // Генерация токена
     const token = generateToken(user.rows[0].id);
+    
+    // Формируем ответ
+    const userData = {
+      id: user.rows[0].id,
+      email: user.rows[0].email,
+      first_name: user.rows[0].first_name,
+      last_name: user.rows[0].last_name,
+      middle_name: user.rows[0].middle_name,
+      company_id: user.rows[0].company_id,
+      company: user.rows[0].company,
+      phone: user.rows[0].phone
+    };
 
-    res.json({
-      token,
-      user: {
-        id: user.rows[0].id,
-        email: user.rows[0].email,
-        first_name: user.rows[0].first_name,
-        last_name: user.rows[0].last_name,
-        middle_name: user.rows[0].middle_name,
-        company_id: user.rows[0].company_id,
-        company: user.rows[0].company,
-        phone: user.rows[0].phone
-      }
-    })
+    res.json({ token, user: userData });
 
   } catch (err) {
-    next(err)
+    console.error('Login Error:', err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
-}
+};
 
-module.exports = { register, login }
+module.exports = { register, login };

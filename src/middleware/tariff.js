@@ -1,15 +1,21 @@
-// tariffMiddleware.js
 const pool = require('../config/db');
 
 module.exports = async (req, res, next) => {
-  if (req.path.startsWith('/auth') || req.path === '/tariffs') {
+  // Пропускаем публичные маршруты
+  if (req.path.startsWith('/auth') || 
+      req.path === '/tariffs' ||
+      req.path === '/pay') {
     return next();
   }
 
   try {
+    // Объединяем запросы в один
     const result = await pool.query(
-      `SELECT 1 FROM client_tariffs 
-       WHERE client_id = $1 AND end_date > NOW() AND is_active = TRUE`,
+      `SELECT ca.expiry_date 
+       FROM client_access ca
+       JOIN client_tariffs ct ON ca.tariff_id = ct.id
+       WHERE ca.client_id = $1 AND ca.expiry_date > NOW()
+       LIMIT 1`,
       [req.user.id]
     );
 

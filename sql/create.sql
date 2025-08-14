@@ -32,48 +32,6 @@ CREATE TABLE Companies (
     name VARCHAR (255) NOT NULL
 );
 
-CREATE TABLE Tariffs (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    description TEXT,
-    price DECIMAL(10, 2) NOT NULL,
-    duration_days INTEGER NOT NULL,  -- срок действия в днях
-    max_users INTEGER,               -- максимальное количество пользователей
-    allow_anonymous BOOLEAN DEFAULT FALSE,
-    has_analytics BOOLEAN DEFAULT FALSE,
-    has_support BOOLEAN DEFAULT FALSE,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE ClientTariffs (
-    id SERIAL PRIMARY KEY,
-    client_id INTEGER NOT NULL REFERENCES Clients(id) ON DELETE CASCADE,
-    tariff_id INTEGER NOT NULL REFERENCES tariffs(id),
-    purchase_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    start_date TIMESTAMP NOT NULL,         -- дата начала действия
-    end_date TIMESTAMP NOT NULL,           -- дата окончания
-    price_paid DECIMAL(10, 2) NOT NULL,    -- фактически оплаченная сумма
-    has_consultant BOOLEAN DEFAULT FALSE,  -- включен ли консультант
-    payment_status VARCHAR(20) DEFAULT 'pending', -- pending/paid/failed/refunded
-    payment_method VARCHAR(50),            -- способ оплаты
-    transaction_id VARCHAR(100),           -- ID транзакции в платежной системе
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE TariffFeatures (
-    id SERIAL PRIMARY KEY,
-    tariff_id INTEGER NOT NULL REFERENCES tariffs(id) ON DELETE CASCADE,
-    feature_name VARCHAR(100) NOT NULL,
-    feature_value TEXT,
-    is_limited BOOLEAN DEFAULT FALSE,
-    limit_value INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE Users (
 	id SERIAL NOT NULL PRIMARY KEY ,
     first_name VARCHAR(255) NULL,
@@ -182,4 +140,87 @@ CREATE TABLE QuestionImages (
     image_path TEXT NOT NULL,
     question_id INT NULL,
     Foreign Key (question_id) REFERENCES Questions(id)
+);
+
+
+
+-- Таблица типов доступа
+CREATE TABLE AccessTypes (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT
+);
+
+-- Таблица тарифных планов
+CREATE TABLE Tariffs (
+    id SERIAL PRIMARY KEY,
+    access_type_id INTEGER NOT NULL REFERENCES AccessTypes(id),
+    title VARCHAR(100) NOT NULL,
+    description TEXT,
+    price DECIMAL(10,2) NOT NULL,
+    duration_days INTEGER NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- Таблица покупок клиентов
+CREATE TABLE ClientTariffs (
+    id SERIAL PRIMARY KEY,
+    client_id INTEGER NOT NULL REFERENCES Clients(id),
+    tariff_id INTEGER NOT NULL REFERENCES Tariffs(id),
+    purchase_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expiry_date TIMESTAMP NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- Таблица тестов, включенных в тарифы
+CREATE TABLE TariffTests (
+    tariff_id INTEGER NOT NULL REFERENCES Tariffs(id),
+    test_id INTEGER NOT NULL REFERENCES Tests(id),
+    PRIMARY KEY (tariff_id, test_id)
+);
+
+
+-- Типы доступа
+INSERT INTO AccessTypes (name, description) VALUES 
+('candidates', 'Тестирование кандидатов'),
+('analytics', 'Анализ персонала компании');
+
+-- Тарифы для тестирования кандидатов
+INSERT INTO Tariffs (access_type_id, title, description, price, duration_days) VALUES
+(1, 'Разовый тест', 'Доступ на 1 день', 500, 1),
+(1, 'Подписка на 1 месяц', 'Неограниченное тестирование', 1500, 30),
+(1, 'Подписка на 3 месяца', 'Скидка 20%', 3600, 90);
+
+-- Тарифы для анализа персонала
+INSERT INTO Tariffs (access_type_id, title, description, price, duration_days) VALUES
+(2, 'Разовый отчет', 'Анализ до 10 сотрудников', 2000, 1),
+(2, 'Месячная подписка', 'Неограниченная аналитика', 5000, 30);
+
+-- Связь тарифов с тестами
+-- Предположим, что тесты 1,2,3 относятся к кандидатам, а 4,5 - к аналитике
+INSERT INTO TariffTests (tariff_id, test_id) VALUES
+(1,1), (1,2), (1,3),
+(2,1), (2,2), (2,3),
+(3,1), (3,2), (3,3),
+(4,4), (4,5),
+(5,4), (5,5);
+
+
+-- Таблица доступа к тестам
+CREATE TABLE ClientTestsAccess (
+    client_id INTEGER NOT NULL REFERENCES Clients(id),
+    test_id INTEGER NOT NULL REFERENCES Tests(id),
+    company_id INTEGER NOT NULL REFERENCES Companies(id),
+    access_from TIMESTAMP NOT NULL,
+    access_to TIMESTAMP NOT NULL,
+    PRIMARY KEY (client_id, test_id)
+);
+
+-- Таблица платежей
+CREATE TABLE Payments (
+    id SERIAL PRIMARY KEY,
+    client_id INTEGER NOT NULL REFERENCES Clients(id),
+    amount DECIMAL(10,2) NOT NULL,
+    payment_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'completed', 'failed'))
 );

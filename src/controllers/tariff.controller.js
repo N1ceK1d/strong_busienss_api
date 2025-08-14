@@ -1,88 +1,129 @@
-const pool = require('../config/db')
+const pool = require('../config/db');
+
+exports.getAccessTypes = async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT id, name, description 
+            FROM AccessTypes
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
 
 exports.getTariffs = async (req, res) => {
-  try {
-    const tariffs = await pool.query('SELECT * FROM tariffs WHERE is_active = TRUE');
-    res.json(tariffs.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Ошибка получения тарифов' });
-  }
+    try {
+        const result = await pool.query(`
+            SELECT t.id, a.name AS access_type, t.title, t.description, t.price, t.duration_days
+            FROM Tariffs t
+            JOIN AccessTypes a ON t.access_type_id = a.id
+            WHERE t.is_active = TRUE
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 };
 
-// Покупка тарифа
-exports.buyTariff = async (req, res) => {
-  const { clientId, tariffId, needConsultant } = req.body;
-  
-  try {
-    // Начинаем транзакцию
-    await pool.query('BEGIN');
-
-    // 1. Получаем данные тарифа
-    const tariff = await pool.query(
-      'SELECT * FROM tariffs WHERE id = $1', 
-      [tariffId]
-    );
+exports.getClientTariffs = async (req, res) => {
+    const clientId = req.user.id;
     
-    if (tariff.rows.length === 0) {
-      return res.status(404).json({ error: 'Тариф не найден' });
+    try {
+        const result = await pool.query(`
+            SELECT t.title, ct.purchase_date, ct.expiry_date, a.name AS access_type
+            FROM ClientTariffs ct
+            JOIN Tariffs t ON ct.tariff_id = t.id
+            JOIN AccessTypes a ON t.access_type_id = a.id
+            WHERE ct.client_id = $1 AND ct.is_active = TRUE
+        `, [clientId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+exports.purchaseTariffs = async (req, res) => {
+    const clientId = req.user.id;
+    const { tariffs, total } = req.body;
+    const client = await pool.query('SELECT company_id FROM Clients WHERE id = $1', [clientId]);
+    const companyId = client.rows[0]?.company_id;
+
+    if (!companyId) {
+        return res.status(400).json({ error: 'Компания не найдена' });
     }
 
-    const tariffData = tariff.rows[0];
-    const finalPrice = needConsultant ? tariffData.price + 5000 : tariffData.price;
-
-    // 2. Создаем запись о покупке
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(startDate.getDate() + tariffData.duration_days);
-
-    const newTariff = await pool.query(
-      `INSERT INTO client_tariffs 
-       (client_id, tariff_id, start_date, end_date, price_paid, has_consultant, payment_status) 
-       VALUES ($1, $2, $3, $4, $5, $6, 'paid')
-       RETURNING *`,
-      [clientId, tariffId, startDate, endDate, finalPrice, needConsultant]
-    );
-
-    // 3. Обновляем клиента (добавляем ссылку на активный тариф)
-    await pool.query(
-      'UPDATE clients SET active_tariff_id = $1 WHERE id = $2',
-      [newTariff.rows[0].id, clientId]
-    );
-
-    // Фиксируем транзакцию
-    await pool.query('COMMIT');
-
-    // Отправляем email
-    await sendEmail({
-      to: req.user.email,
-      subject: 'Подтверждение покупки тарифа',
-      text: `Вы успешно приобрели тариф "${tariffData.name}"`
-    });
-
-    res.json(newTariff.rows[0]);
-  } catch (err) {
-    await pool.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ error: 'Ошибка покупки тарифа' });
-  }
-};
-
-// Проверка активного тарифа
-exports.checkTariff = async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT ct.*, t.name as tariff_name 
-       FROM client_tariffs ct
-       JOIN tariffs t ON ct.tariff_id = t.id
-       WHERE ct.client_id = $1 AND ct.end_date > NOW() AND ct.is_active = TRUE
-       ORDER BY ct.end_date DESC LIMIT 1`,
-      [req.user.id]
-    );
-
-    res.json(result.rows[0] || null);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Ошибка проверки тарифа' });
-  }
+    try {
+        await pool.query('BEGIN');
+        
+        // Создаем платеж
+        const payment = await pool.query(`
+            INSERT INTO Payments (client_id, amount, status)
+            VALUES ($1, $2, 'completed')
+            RETURNING id
+        `, [clientId, total]);
+        
+        const paymentId = payment.rows[0].id;
+        
+        // Обрабатываем каждый выбранный тариф
+        for (const item of tariffs) {
+            // Получаем данные тарифа
+            const tariffData = await pool.query(`
+                SELECT price, duration_days 
+                FROM Tariffs 
+                WHERE id = $1
+            `, [item.tariff_id]);
+            
+            if (tariffData.rows.length === 0) {
+                throw new Error(`Тариф ${item.tariff_id} не найден`);
+            }
+            
+            const duration = tariffData.rows[0].duration_days;
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + duration);
+            
+            // Создаем запись о покупке
+            await pool.query(`
+                INSERT INTO ClientTariffs (
+                    client_id, 
+                    tariff_id, 
+                    purchase_date, 
+                    expiry_date,
+                    payment_id
+                )
+                VALUES ($1, $2, NOW(), $3, $4)
+            `, [clientId, item.tariff_id, expiryDate, paymentId]);
+            
+            // Активируем доступ к тестам
+            const tests = await pool.query(`
+                SELECT test_id 
+                FROM TariffTests 
+                WHERE tariff_id = $1
+            `, [item.tariff_id]);
+            
+            for (const test of tests.rows) {
+                await pool.query(`
+                    INSERT INTO ClientTestsAccess (
+                        client_id,
+                        test_id,
+                        company_id,
+                        access_from,
+                        access_to
+                    )
+                    VALUES ($1, $2, $3, NOW(), $4)
+                    ON CONFLICT (client_id, test_id) 
+                    DO UPDATE SET access_to = EXCLUDED.access_to
+                `, [clientId, test.test_id, companyId, expiryDate]);
+            }
+        }
+        
+        await pool.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await pool.query('ROLLBACK');
+        console.error('Purchase error:', err);
+        res.status(500).json({ 
+            error: err.message || 'Internal server error' 
+        });
+    }
 };
