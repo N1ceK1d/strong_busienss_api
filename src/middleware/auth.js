@@ -26,8 +26,9 @@ const authMiddleware = async (req, res, next) => {
 
     // Ищем пользователя в базе данных
     const userResult = await pool.query(
-      `SELECT id, email, first_name, last_name, is_admin 
-       FROM Clients WHERE id = $1`,
+      `SELECT Clients.id, email, first_name, last_name, middle_name, company_id, phone, name as company
+       FROM Clients
+       INNER JOIN Companies ON Clients.company_id = Companies.id WHERE Clients.id = $1`,
       [decoded.userId]
     );
 
@@ -42,7 +43,10 @@ const authMiddleware = async (req, res, next) => {
       email: user.email,
       first_name: user.first_name,
       last_name: user.last_name,
-      is_admin: user.is_admin
+      middle_name: user.middle_name,
+      company_id: user.company_id,
+      phone: user.phone,
+      company: user.company
     };
     
     next();
