@@ -1,1 +1,0 @@
-import{_ as e,c as o,o as s,a as t,V as a}from"./index-CkxHNwIo.js";const r={name:"HomeView"},c={class:"home"};function n(_,i,m,d,p,f){return s(),o("div",c,[t(a,{indeterminate:""})])}const u=e(r,[["render",n]]);export{u as default};
