@@ -43,6 +43,23 @@ exports.getClientTariffs = async (req, res) => {
     }
 };
 
+exports.getTariffTests = async (req, res) => {
+    const { tariffId } = req.params;
+    
+    try {
+        const result = await pool.query(`
+            SELECT tt.test_id, t.name, t.description
+            FROM TariffTests tt
+            JOIN Tests t ON tt.test_id = t.id
+            WHERE tt.tariff_id = $1
+        `, [tariffId]);
+        
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
 exports.purchaseTariffs = async (req, res) => {
     const clientId = req.user.id;
     const { tariffs, total } = req.body;
@@ -55,6 +72,21 @@ exports.purchaseTariffs = async (req, res) => {
 
     try {
         await pool.query('BEGIN');
+        
+        // Проверяем, не куплены ли уже эти тарифы
+        for (const item of tariffs) {
+            const existingTariff = await pool.query(`
+                SELECT id FROM ClientTariffs 
+                WHERE client_id = $1 AND tariff_id = $2 AND is_active = TRUE
+            `, [clientId, item.tariff_id]);
+            
+            if (existingTariff.rows.length > 0) {
+                await pool.query('ROLLBACK');
+                return res.status(400).json({ 
+                    error: `Тариф уже приобретен (ID: ${item.tariff_id})` 
+                });
+            }
+        }
         
         // Создаем платеж
         const payment = await pool.query(`
@@ -88,11 +120,10 @@ exports.purchaseTariffs = async (req, res) => {
                     client_id, 
                     tariff_id, 
                     purchase_date, 
-                    expiry_date,
-                    payment_id
+                    expiry_date
                 )
-                VALUES ($1, $2, NOW(), $3, $4)
-            `, [clientId, item.tariff_id, expiryDate, paymentId]);
+                VALUES ($1, $2, NOW(), $3)
+            `, [clientId, item.tariff_id, expiryDate]);
             
             // Активируем доступ к тестам
             const tests = await pool.query(`
